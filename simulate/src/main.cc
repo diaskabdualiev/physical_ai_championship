@@ -764,8 +764,17 @@ void *UnitreeSdk2BridgeThread(void *arg)
     g_ctrl_pid = fork();
     if (g_ctrl_pid == 0) {
       // Child process: launch g1_ctrl
-      std::string ctrl_path = std::filesystem::current_path().parent_path().parent_path().string() + "/g1_ctrl/build/g1_ctrl";
-      std::string ctrl_dir = std::filesystem::current_path().parent_path().parent_path().string() + "/g1_ctrl/build";
+      // Resolve relative to the executable location, not CWD
+      std::string exe_dir = getExecutableDir();
+      std::string base_dir;
+      if (!exe_dir.empty()) {
+        base_dir = std::filesystem::path(exe_dir).parent_path().parent_path().string();
+      } else {
+        // Fallback: assume CWD is simulate/build
+        base_dir = std::filesystem::current_path().parent_path().parent_path().string();
+      }
+      std::string ctrl_path = base_dir + "/g1_ctrl/build/g1_ctrl";
+      std::string ctrl_dir = base_dir + "/g1_ctrl/build";
       chdir(ctrl_dir.c_str());
       execlp(ctrl_path.c_str(), "g1_ctrl", "--network=lo", nullptr);
       std::cerr << "[AutoLaunch] Failed to launch g1_ctrl at " << ctrl_path << std::endl;

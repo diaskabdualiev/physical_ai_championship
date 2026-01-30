@@ -3,6 +3,13 @@ project(g1_29dof_controller)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Find unitree_sdk2 (brings in ddsc, ddscxx, include paths automatically)
+list(APPEND CMAKE_PREFIX_PATH
+  "/opt/unitree_robotics/lib/cmake"
+  "/usr/local/lib/cmake"
+)
+find_package(unitree_sdk2 REQUIRED)
+
 find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(yaml-cpp REQUIRED)
 
@@ -18,15 +25,13 @@ endif()
 
 include_directories(
   /usr/include/eigen3
-  /usr/local/include/ddscxx # dds
-  /usr/local/include/iceoryx/v2.0.2 # dds
   include
   ${ONNX_DIR}/include
   ${PROJECT_SOURCE_DIR}/include/
 )
 
 link_libraries(
-  unitree_sdk2 ddsc ddscxx rt pthread # dds
+  unitree_sdk2 ddsc ddscxx rt pthread
   libboost_program_options.a libyaml-cpp.a fmt
   ${ONNX_DIR}/lib/libonnxruntime.so
 )
