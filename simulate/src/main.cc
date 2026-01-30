@@ -859,8 +859,8 @@ int main(int argc, char **argv)
     param::config.robot_scene = proj_dir.parent_path() / "unitree_robots" / param::config.robot / param::config.robot_scene;
   }
 
-  // initialize auto_search from config
-  auto_search.enabled.store(param::config.enable_auto_search == 1);
+  // auto_search starts disabled; auto_launch boot sequence enables it automatically
+  auto_search.enabled.store(false);
 
   // Register cleanup for child processes
   std::atexit(cleanup_child);

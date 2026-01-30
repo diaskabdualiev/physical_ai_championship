@@ -26,7 +26,6 @@ inline struct SimulationConfig
     int enable_elastic_band;
     int band_attached_link = 0;
 
-    int enable_auto_search = 0;
     int auto_launch = 0;
     double cube_respawn_distance = 0.5;
     int show_camera_window = 1;
@@ -48,7 +47,6 @@ inline struct SimulationConfig
             joystick_bits = cfg["joystick_bits"].as<int>();
             print_scene_information = cfg["print_scene_information"].as<int>();
             enable_elastic_band = cfg["enable_elastic_band"].as<int>();
-            if (cfg["enable_auto_search"]) enable_auto_search = cfg["enable_auto_search"].as<int>();
             if (cfg["auto_launch"]) auto_launch = cfg["auto_launch"].as<int>();
             if (cfg["cube_respawn_distance"]) cube_respawn_distance = cfg["cube_respawn_distance"].as<double>();
             if (cfg["show_camera_window"]) show_camera_window = cfg["show_camera_window"].as<int>();

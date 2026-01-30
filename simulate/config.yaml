@@ -13,8 +13,7 @@ print_scene_information: 1 # Print link, joint and sensors information of robot
 
 enable_elastic_band: 1 # Virtual spring band, used for lifting h1
 
-enable_auto_search: 0
-auto_launch: 1          # 1 = auto FixStand + Velocity + AutoSearch + launch g1_ctrl # Enable autonomous box search mode
+auto_launch: 1          # 1 = auto FixStand + Velocity + AutoSearch + launch g1_ctrl
 cube_respawn_distance: 0.5 # Distance threshold to respawn cube
 show_camera_window: 1 # Show OpenCV debug camera window
 auto_respawn: 1         # 1 = respawn robot+cube after 2s stopped (for testing)
