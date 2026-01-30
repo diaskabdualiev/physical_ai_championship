@@ -4,7 +4,7 @@ robot_scene: "scene_room.xml" # Robot scene, /unitree_robots/[robot]/scene.xml
 domain_id: 0  # Domain id
 interface: "lo" # Interface 
 
-use_joystick: 1 # Simulate Unitree WirelessController using a gamepad
+use_joystick: 0 # 0 when auto_launch=1, 1 for manual gamepad control
 joystick_type: "xbox" # support "xbox" and "switch" gamepad layout
 joystick_device: "/dev/input/js1" # Device path
 joystick_bits: 16 # Some game controllers may only have 8-bit accuracy
@@ -13,6 +13,7 @@ print_scene_information: 1 # Print link, joint and sensors information of robot
 
 enable_elastic_band: 1 # Virtual spring band, used for lifting h1
 
-enable_auto_search: 0 # Enable autonomous box search mode
+enable_auto_search: 0
+auto_launch: 1          # 1 = auto FixStand + Velocity + AutoSearch + launch g1_ctrl # Enable autonomous box search mode
 cube_respawn_distance: 0.5 # Distance threshold to respawn cube
 show_camera_window: 1 # Show OpenCV debug camera window

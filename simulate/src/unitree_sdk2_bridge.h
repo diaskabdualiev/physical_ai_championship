@@ -39,6 +39,10 @@ public:
                 exit(EXIT_FAILURE);
             }
         }
+        // Create virtual joystick for auto_launch when no physical joystick
+        if(param::config.auto_launch == 1 && !joystick) {
+            joystick = std::make_shared<unitree::common::UnitreeJoystick>();
+        }
 
     }
 
@@ -162,10 +166,16 @@ public:
     {
         lowcmd = std::make_shared<LowCmd_t>("rt/lowcmd");
         lowstate = std::make_unique<LowState_t>();
-        lowstate->joystick = joystick;
+        // When auto_launch, don't give joystick to lowstate/wireless_controller
+        // so their publish() won't call combine() and overwrite our memcpy injection
+        if (param::config.auto_launch != 1) {
+            lowstate->joystick = joystick;
+        }
         highstate = std::make_unique<HighState_t>();
         wireless_controller = std::make_unique<WirelessController_t>();
-        wireless_controller->joystick = joystick;
+        if (param::config.auto_launch != 1) {
+            wireless_controller->joystick = joystick;
+        }
     }
 
     void start()
@@ -177,7 +187,7 @@ public:
     virtual void run()
     {
         if(!mj_data_) return;
-        if(lowstate->joystick && !auto_search.enabled.load()) { lowstate->joystick->update(); }
+        if(joystick && !auto_search.enabled.load()) { joystick->update(); }
         // lowcmd
         {
             std::lock_guard<std::mutex> lock(lowcmd->mutex_);
@@ -225,6 +235,40 @@ public:
                 lowstate->msg_.imu_state().accelerometer()[2] = mj_data_->sensordata[imu_acc_adr_ + 2];
             }
             
+            // Inject buttons/axes directly into wireless_remote before publish
+            if(param::config.auto_launch == 1) {
+                if (!auto_search.isBootReady()) {
+                    auto btn = auto_search.updateBoot(mj_data_->time);
+                    // Build raw joystick data, bypassing Axis smoothing
+                    unitree::common::REMOTE_DATA_RX key{};
+                    key.RF_RX.head[0] = 0xFE;
+                    key.RF_RX.head[1] = 0xEF;
+                    key.RF_RX.btn.components.L2 = btn.lt ? 1 : 0;
+                    key.RF_RX.btn.components.up = btn.up ? 1 : 0;
+                    key.RF_RX.btn.components.R1 = btn.rb ? 1 : 0;
+                    key.RF_RX.btn.components.X = btn.x ? 1 : 0;
+                    key.RF_RX.L2 = btn.lt ? 1.0f : 0.0f;
+                    memcpy(&lowstate->msg_.wireless_remote()[0], &key, sizeof(key));
+                }
+                if (auto_search.enabled.load()) {
+                    // Override joystick axes for auto_search movement
+                    unitree::common::REMOTE_DATA_RX key{};
+                    key.RF_RX.head[0] = 0xFE;
+                    key.RF_RX.head[1] = 0xEF;
+                    key.RF_RX.ly = auto_search.getLy();
+                    key.RF_RX.rx = auto_search.getRx();
+                    key.RF_RX.lx = 0.0f;
+                    memcpy(&lowstate->msg_.wireless_remote()[0], &key, sizeof(key));
+                }
+            } else if(joystick) {
+                // Normal joystick mode
+                if(auto_search.enabled.load()) {
+                    joystick->ly(auto_search.getLy());
+                    joystick->rx(auto_search.getRx());
+                    joystick->lx(0.0f);
+                }
+            }
+
             lowstate->msg_.tick() = std::round(mj_data_->time / 1e-3);
             lowstate->unlockAndPublish();
         }
@@ -244,12 +288,6 @@ public:
         }
         // wireless_controller
         if(wireless_controller->joystick) {
-            // Override joystick with auto_search virtual commands
-            if(auto_search.enabled.load()) {
-                wireless_controller->joystick->ly(auto_search.getLy());
-                wireless_controller->joystick->rx(auto_search.getRx());
-                wireless_controller->joystick->lx(0.0f);
-            }
             wireless_controller->unlockAndPublish();
         }
     }

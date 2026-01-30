@@ -93,7 +93,7 @@ The key insight: `g1_ctrl` does not know it's being controlled by an algorithm. 
 | Sensor | Implementation | Purpose |
 |--------|---------------|---------|
 | RGB Camera | MuJoCo offscreen render (`head_cam`, 320x240, FOV 75°) | Red cube detection via OpenCV HSV filtering |
-| LiDAR (depth) | MuJoCo depth buffer at cube's bounding box center | Distance measurement for stopping at ≤0.9m |
+| LiDAR | MuJoCo `rangefinder` sensor on head + depth buffer at cube bbox center | Distance measurement for stopping at ≤0.5m |
 | IMU | Built-in MuJoCo sensors | Balance and locomotion (used by g1_ctrl) |
 
 **No ground-truth access** — cube position is determined solely through visual perception.
@@ -118,11 +118,11 @@ The key insight: `g1_ctrl` does not know it's being controlled by an algorithm. 
        │ |offset| ≤ 0.15 (cube centered)
        ▼
 ┌──────────────┐
-│  APPROACHING │    depth > 0.9m
+│  APPROACHING │    depth > 0.5m
 │  rx = 0.0    │
 │  ly = 0.7    │
 └──────┬───────┘
-       │ depth ≤ 0.9m
+       │ depth ≤ 0.5m
        ▼
 ┌──────────────┐
 │   STOPPED    │
@@ -145,12 +145,13 @@ The key insight: `g1_ctrl` does not know it's being controlled by an algorithm. 
 
 | File | Change |
 |------|--------|
-| `unitree_robots/g1/g1_29dof.xml` | Added `head_cam` camera on torso_link; increased arm damping |
+| `unitree_robots/g1/g1_29dof.xml` | Added `head_cam` camera, LiDAR rangefinder on head; increased arm damping |
 | `unitree_robots/g1/scene_room.xml` | Added red cube with free joint |
 | `simulate/src/auto_search.h` | **NEW** — AutoSearch class (detection + state machine) |
-| `simulate/src/main.cc` | Offscreen rendering, random init, keyboard toggle |
-| `simulate/src/unitree_sdk2_bridge.h` | Virtual joystick override when auto_search enabled |
-| `simulate/src/param.h` | Config params: enable_auto_search, cube_respawn_distance, show_camera_window |
+| `simulate/src/main.cc` | Offscreen rendering, random init, auto_launch boot sequence, g1_ctrl subprocess |
+| `simulate/src/unitree_sdk2_bridge.h` | DDS button injection for auto_launch, virtual joystick override |
+| `simulate/src/param.h` | Config params: auto_launch, enable_auto_search, show_camera_window |
+| `APPROACH.md` | **NEW** — Краткое описание подхода (1 страница) |
 | `simulate/config.yaml` | New config entries |
 | `simulate/CMakeLists.txt` | OpenCV dependency |
 
@@ -188,24 +189,32 @@ Architecture (aarch64/x86_64) is auto-detected. MuJoCo 3.3.6 is downloaded autom
 
 ## Run
 
-**Terminal 1 — Simulator:**
+### Автономный режим (auto_launch=1, по умолчанию)
+
+Одна команда — робот автоматически встаёт, включает Velocity mode и начинает поиск:
+
 ```bash
 cd simulate/build
 ./unitree_mujoco
 ```
 
-**Terminal 2 — Controller:**
+Контроллер `g1_ctrl` запускается автоматически как дочерний процесс. Джойстик не нужен.
+
+### Ручной режим (auto_launch=0)
+
 ```bash
+# Terminal 1
+cd simulate/build
+./unitree_mujoco
+
+# Terminal 2
 cd g1_ctrl/build
 ./g1_ctrl --network=lo
 ```
 
-**Manual steps (current implementation):**
-1. Wait for robot to load
-2. On gamepad: `LT + Up` → FixStand (robot stands up)
-3. On gamepad: `RB + X` → Velocity mode
-4. Press keyboard `0` in MuJoCo window → AutoSearch activates
-5. Robot autonomously searches, approaches, and stops near cube
+1. Gamepad: `LT + Up` → FixStand
+2. Gamepad: `RB + X` → Velocity mode
+3. Keyboard `0` → AutoSearch
 
 **Debug window:** OpenCV window shows head camera view with detection overlay (SEARCHING / CENTERING / APPROACHING / STOPPED) and depth readout.
 
@@ -213,9 +222,10 @@ cd g1_ctrl/build
 
 `simulate/config.yaml`:
 ```yaml
-enable_auto_search: 0   # 1 to start auto_search on launch
-cube_respawn_distance: 0.5
-show_camera_window: 1    # 1 to show OpenCV debug window
+auto_launch: 1           # 1 = fully autonomous (single terminal, no gamepad)
+use_joystick: 0          # 0 when auto_launch=1
+enable_auto_search: 0    # auto_launch handles this automatically
+show_camera_window: 1    # 1 to show OpenCV debug camera window
 ```
 
 ## Verification
@@ -224,7 +234,7 @@ At each launch:
 - Cube spawns at random position (±1.5m from center, min 0.8m from robot)
 - Robot yaw is randomized
 - Robot finds cube through vision only (no ground-truth)
-- Robot stops at ≤0.9m from cube (measured by depth sensor at cube bbox)
+- Robot stops at ≤0.5m from cube (measured by depth sensor at cube bbox)
 - Works regardless of cube position or robot orientation
 
 ## Approach Summary

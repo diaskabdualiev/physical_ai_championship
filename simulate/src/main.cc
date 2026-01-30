@@ -28,6 +28,12 @@
 #include <new>
 #include <string>
 #include <thread>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <csignal>
+#include <cstdlib>
+#include <filesystem>
 
 #include <mujoco/mujoco.h>
 #include "simulate.h"
@@ -86,6 +92,15 @@ public:
 };
 inline ElasticBand elastic_band;
 inline AutoSearch auto_search;
+static pid_t g_ctrl_pid = -1;
+
+static void cleanup_child() {
+  if (g_ctrl_pid > 0) {
+    kill(g_ctrl_pid, SIGTERM);
+    waitpid(g_ctrl_pid, nullptr, 0);
+    g_ctrl_pid = -1;
+  }
+}
 
 // Offscreen rendering state
 static mjvScene offscreen_scn;
@@ -515,6 +530,21 @@ namespace
                   }
                 }
 
+                // Auto-launch: manage elastic band lowering
+                if (param::config.auto_launch == 1) {
+                  if (auto_search.boot_phase_ == BootPhase::LOWERING) {
+                    elastic_band.length_ += 0.0005; // gradual lowering
+                    if (elastic_band.length_ >= 0.5) {
+                      auto_search.boot_phase_ = BootPhase::FIXSTAND_WARMUP;
+                      std::cout << "[AutoLaunch] Band lowered, warming up LT..." << std::endl;
+                    }
+                  }
+                  // Disable elastic band when entering BAND_OFF_WAIT
+                  if (auto_search.boot_phase_ == BootPhase::BAND_OFF_WAIT) {
+                    elastic_band.enable_ = false;
+                  }
+                }
+
                 // call mj_step
                 mj_step(m, d);
                 stepped = true;
@@ -705,8 +735,25 @@ void *UnitreeSdk2BridgeThread(void *arg)
   } else {
     interface = std::make_unique<Go2Bridge>(m, d);
   }
+  // Auto-launch g1_ctrl as subprocess
+  if (param::config.auto_launch == 1) {
+    g_ctrl_pid = fork();
+    if (g_ctrl_pid == 0) {
+      // Child process: launch g1_ctrl
+      std::string ctrl_path = std::filesystem::current_path().parent_path().parent_path().string() + "/g1_ctrl/build/g1_ctrl";
+      std::string ctrl_dir = std::filesystem::current_path().parent_path().parent_path().string() + "/g1_ctrl/build";
+      chdir(ctrl_dir.c_str());
+      execlp(ctrl_path.c_str(), "g1_ctrl", "--network=lo", nullptr);
+      std::cerr << "[AutoLaunch] Failed to launch g1_ctrl at " << ctrl_path << std::endl;
+      _exit(1);
+    } else if (g_ctrl_pid > 0) {
+      std::cout << "[AutoLaunch] g1_ctrl started (PID " << g_ctrl_pid << ")" << std::endl;
+    }
+  }
+
   interface->start();
-  
+
+  // Block until process exits; cleanup_child() via atexit handles g1_ctrl
   while (true)
   {
     sleep(1);
@@ -790,6 +837,11 @@ int main(int argc, char **argv)
 
   // initialize auto_search from config
   auto_search.enabled.store(param::config.enable_auto_search == 1);
+
+  // Register cleanup for child processes
+  std::atexit(cleanup_child);
+  std::signal(SIGINT, [](int) { cleanup_child(); std::_Exit(0); });
+  std::signal(SIGTERM, [](int) { cleanup_child(); std::_Exit(0); });
 
   // simulate object encapsulates the UI
   auto sim = std::make_unique<mj::Simulate>(
