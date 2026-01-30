@@ -30,6 +30,8 @@ inline struct SimulationConfig
     int auto_launch = 0;
     double cube_respawn_distance = 0.5;
     int show_camera_window = 1;
+    int auto_respawn = 0;
+    double auto_respawn_delay = 2.0;
 
     void load_from_yaml(const std::string &filename)
     {
@@ -50,6 +52,8 @@ inline struct SimulationConfig
             if (cfg["auto_launch"]) auto_launch = cfg["auto_launch"].as<int>();
             if (cfg["cube_respawn_distance"]) cube_respawn_distance = cfg["cube_respawn_distance"].as<double>();
             if (cfg["show_camera_window"]) show_camera_window = cfg["show_camera_window"].as<int>();
+            if (cfg["auto_respawn"]) auto_respawn = cfg["auto_respawn"].as<int>();
+            if (cfg["auto_respawn_delay"]) auto_respawn_delay = cfg["auto_respawn_delay"].as<double>();
         }
         catch(const std::exception& e)
         {

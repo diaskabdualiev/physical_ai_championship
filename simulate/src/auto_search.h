@@ -166,6 +166,25 @@ public:
     SearchState getState() const { return state_; }
     bool isStopped() const { return stopped_; }
 
+    // Track stopped duration, return true when respawn needed
+    bool checkRespawn(double sim_time, double delay)
+    {
+        if (stopped_) {
+            if (stopped_time_ < 0) stopped_time_ = sim_time;
+            if (sim_time - stopped_time_ >= delay) {
+                stopped_time_ = -1;
+                stopped_ = false;
+                state_ = SearchState::SEARCHING;
+                rx_ = 1.0f;
+                ly_ = 0.0f;
+                return true;
+            }
+        } else {
+            stopped_time_ = -1;
+        }
+        return false;
+    }
+
     // Respawn cube to random position within room bounds, avoiding robot
     void respawnCube(mjModel* m, mjData* d, int cube_body_id)
     {
@@ -319,5 +338,6 @@ private:
     float ly_ = 0.0f;
     float rx_ = 0.0f;
     bool stopped_ = false;
+    double stopped_time_ = -1;
     std::mt19937 rng_;
 };

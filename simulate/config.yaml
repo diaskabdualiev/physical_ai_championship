@@ -17,3 +17,5 @@ enable_auto_search: 0
 auto_launch: 1          # 1 = auto FixStand + Velocity + AutoSearch + launch g1_ctrl # Enable autonomous box search mode
 cube_respawn_distance: 0.5 # Distance threshold to respawn cube
 show_camera_window: 1 # Show OpenCV debug camera window
+auto_respawn: 1         # 1 = respawn robot+cube after 2s stopped (for testing)
+auto_respawn_delay: 2.0 # Seconds to wait in STOPPED before respawn

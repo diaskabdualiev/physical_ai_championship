@@ -606,6 +606,30 @@ namespace
               }
             }
 
+            // Auto-respawn: reset robot + cube after stopped for N seconds
+            if (stepped && param::config.auto_respawn == 1 && auto_search.enabled.load())
+            {
+              if (auto_search.checkRespawn(d->time, param::config.auto_respawn_delay))
+              {
+                int cube_body_id = mj_name2id(m, mjOBJ_BODY, "red_cube");
+                if (cube_body_id >= 0) {
+                  auto_search.respawnCube(m, d, cube_body_id);
+                }
+                // Reset robot to center with random yaw
+                std::mt19937 rng(std::random_device{}());
+                std::uniform_real_distribution<double> dist_angle(0.0, 2.0 * M_PI);
+                double yaw = dist_angle(rng);
+                d->qpos[0] = 0.0; d->qpos[1] = 0.0; d->qpos[2] = 0.8;
+                d->qpos[3] = cos(yaw / 2.0);
+                d->qpos[4] = 0.0;
+                d->qpos[5] = 0.0;
+                d->qpos[6] = sin(yaw / 2.0);
+                // Zero base velocities
+                for (int i = 0; i < 6; i++) d->qvel[i] = 0.0;
+                std::cout << "[AutoRespawn] Robot reset, yaw=" << (yaw * 180.0 / M_PI) << "°" << std::endl;
+              }
+            }
+
             // save current state to history buffer
             if (stepped)
             {
