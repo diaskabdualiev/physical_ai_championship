@@ -4,3 +4,6 @@
 **/log/
 **/install/
 simulate/mujoco
+simulate/mujoco-*/
+simulate/mujoco-*.tar.gz
+CMakeFiles/
