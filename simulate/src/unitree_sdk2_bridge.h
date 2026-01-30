@@ -13,6 +13,9 @@
 
 #include "param.h"
 #include "physics_joystick.h"
+#include "auto_search.h"
+
+extern AutoSearch auto_search;
 
 #define MOTOR_SENSOR_NUM 3
 
@@ -174,7 +177,7 @@ public:
     virtual void run()
     {
         if(!mj_data_) return;
-        if(lowstate->joystick) { lowstate->joystick->update(); }
+        if(lowstate->joystick && !auto_search.enabled.load()) { lowstate->joystick->update(); }
         // lowcmd
         {
             std::lock_guard<std::mutex> lock(lowcmd->mutex_);
@@ -241,6 +244,12 @@ public:
         }
         // wireless_controller
         if(wireless_controller->joystick) {
+            // Override joystick with auto_search virtual commands
+            if(auto_search.enabled.load()) {
+                wireless_controller->joystick->ly(auto_search.getLy());
+                wireless_controller->joystick->rx(auto_search.getRx());
+                wireless_controller->joystick->lx(0.0f);
+            }
             wireless_controller->unlockAndPublish();
         }
     }

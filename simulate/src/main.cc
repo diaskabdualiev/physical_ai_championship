@@ -34,6 +34,7 @@
 #include "array_safety.h"
 #include "unitree_sdk2_bridge.h"
 #include "param.h"
+#include "auto_search.h"
 
 #define MUJOCO_PLUGIN_DIR "mujoco_plugin"
 #define NUM_MOTOR_IDL_GO 20
@@ -84,6 +85,18 @@ public:
   std::vector<double> f_ = {0, 0, 0};
 };
 inline ElasticBand elastic_band;
+inline AutoSearch auto_search;
+
+// Offscreen rendering state
+static mjvScene offscreen_scn;
+static mjvCamera offscreen_cam;
+static mjrContext offscreen_con;
+static GLFWwindow* offscreen_window = nullptr;
+static bool offscreen_initialized = false;
+static int offscreen_step_counter = 0;
+static const int OFFSCREEN_RENDER_INTERVAL = 50;
+static const int OFFSCREEN_WIDTH = 320;
+static const int OFFSCREEN_HEIGHT = 240;
 
 
 namespace
@@ -514,6 +527,55 @@ namespace
               }
             }
 
+            // Offscreen camera rendering for auto_search
+            if (stepped && auto_search.enabled.load())
+            {
+              offscreen_step_counter++;
+              if (offscreen_step_counter >= OFFSCREEN_RENDER_INTERVAL)
+              {
+                offscreen_step_counter = 0;
+
+                if (!offscreen_initialized && offscreen_window)
+                {
+                  glfwMakeContextCurrent(offscreen_window);
+                  mjv_defaultScene(&offscreen_scn);
+                  mjv_makeScene(m, &offscreen_scn, 2000);
+                  mjr_defaultContext(&offscreen_con);
+                  mjr_makeContext(m, &offscreen_con, mjFONTSCALE_100);
+                  mjv_defaultCamera(&offscreen_cam);
+                  offscreen_initialized = true;
+                }
+                if (!offscreen_initialized) continue;
+                glfwMakeContextCurrent(offscreen_window);
+
+                int cam_id = mj_name2id(m, mjOBJ_CAMERA, "head_cam");
+                if (cam_id >= 0)
+                {
+                  offscreen_cam.type = mjCAMERA_FIXED;
+                  offscreen_cam.fixedcamid = cam_id;
+
+                  mjvOption vopt;
+                  mjv_defaultOption(&vopt);
+                  mjrRect viewport = {0, 0, OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT};
+
+                  mjv_updateScene(m, d, &vopt, nullptr, &offscreen_cam, mjCAT_ALL, &offscreen_scn);
+                  mjr_setBuffer(mjFB_OFFSCREEN, &offscreen_con);
+                  mjr_render(viewport, &offscreen_scn, &offscreen_con);
+
+                  // Read RGB pixels and depth buffer
+                  std::vector<unsigned char> rgb(OFFSCREEN_WIDTH * OFFSCREEN_HEIGHT * 3);
+                  std::vector<float> depth(OFFSCREEN_WIDTH * OFFSCREEN_HEIGHT);
+                  mjr_readPixels(rgb.data(), depth.data(), viewport, &offscreen_con);
+
+                  float znear = (float)m->vis.map.znear * (float)m->stat.extent;
+                  float zfar = (float)m->vis.map.zfar * (float)m->stat.extent;
+
+                  auto_search.process(rgb.data(), depth.data(), OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT,
+                                      znear, zfar, param::config.show_camera_window == 1);
+                }
+              }
+            }
+
             // save current state to history buffer
             if (stepped)
             {
@@ -548,6 +610,42 @@ void PhysicsThread(mj::Simulate *sim, const char *filename)
     if (d)
     {
       sim->Load(m, d, filename);
+
+      // Randomize cube initial position
+      {
+        int cube_body_id = mj_name2id(m, mjOBJ_BODY, "red_cube");
+        if (cube_body_id >= 0) {
+          int cube_jnt_id = m->body_jntadr[cube_body_id];
+          if (cube_jnt_id >= 0) {
+            int qa = m->jnt_qposadr[cube_jnt_id];
+            std::mt19937 rng(std::random_device{}());
+            std::uniform_real_distribution<double> dist_xy(-1.5, 1.5);
+            double cx, cy;
+            do {
+              cx = dist_xy(rng);
+              cy = dist_xy(rng);
+            } while (std::sqrt(cx*cx + cy*cy) < 0.8); // avoid robot at center
+            d->qpos[qa + 0] = cx;
+            d->qpos[qa + 1] = cy;
+            d->qpos[qa + 2] = 0.15;
+            std::cout << "[Init] Cube position: (" << cx << ", " << cy << ")" << std::endl;
+          }
+        }
+      }
+
+      // Randomize robot initial yaw orientation
+      {
+        std::mt19937 rng(std::random_device{}());
+        std::uniform_real_distribution<double> dist_angle(0.0, 2.0 * M_PI);
+        double yaw = dist_angle(rng);
+        // Quaternion for yaw rotation around Z: (cos(yaw/2), 0, 0, sin(yaw/2))
+        d->qpos[3] = cos(yaw / 2.0);  // w
+        d->qpos[4] = 0.0;             // x
+        d->qpos[5] = 0.0;             // y
+        d->qpos[6] = sin(yaw / 2.0);  // z
+        std::cout << "[Init] Robot yaw randomized to " << (yaw * 180.0 / M_PI) << " degrees" << std::endl;
+      }
+
       mj_forward(m, d);
 
       // allocate ctrlnoise
@@ -562,6 +660,14 @@ void PhysicsThread(mj::Simulate *sim, const char *filename)
   }
 
   PhysicsLoop(*sim);
+
+  // cleanup offscreen rendering
+  if (offscreen_initialized) {
+    glfwMakeContextCurrent(offscreen_window);
+    mjr_freeContext(&offscreen_con);
+    mjv_freeScene(&offscreen_scn);
+    glfwDestroyWindow(offscreen_window);
+  }
 
   // delete everything we allocated
   free(ctrlnoise);
@@ -635,6 +741,10 @@ void user_key_cb(GLFWwindow* window, int key, int scancode, int act, int mods) {
       mj_resetData(m, d);
       mj_forward(m, d);
     }
+    if(key==GLFW_KEY_0) {
+      auto_search.enabled.store(!auto_search.enabled.load());
+      std::cout << "[AutoSearch] " << (auto_search.enabled.load() ? "ENABLED" : "DISABLED") << std::endl;
+    }
   }
 }
 
@@ -678,10 +788,29 @@ int main(int argc, char **argv)
     param::config.robot_scene = proj_dir.parent_path() / "unitree_robots" / param::config.robot / param::config.robot_scene;
   }
 
+  // initialize auto_search from config
+  auto_search.enabled.store(param::config.enable_auto_search == 1);
+
   // simulate object encapsulates the UI
   auto sim = std::make_unique<mj::Simulate>(
     std::make_unique<mj::GlfwAdapter>(),
     &cam, &opt, &pert, /* is_passive = */ false);
+
+  // Create hidden GLFW window for offscreen rendering, sharing context with main window
+  {
+    GLFWwindow* main_wnd = static_cast<mj::GlfwAdapter*>(sim->platform_ui.get())->window_;
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    offscreen_window = glfwCreateWindow(OFFSCREEN_WIDTH, OFFSCREEN_HEIGHT,
+                                         "offscreen", nullptr, main_wnd);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+    if (offscreen_window) {
+      // Restore main window context
+      glfwMakeContextCurrent(main_wnd);
+    } else {
+      std::cerr << "[AutoSearch] Failed to create offscreen window, auto_search disabled" << std::endl;
+      auto_search.enabled.store(false);
+    }
+  }
 
   std::thread unitree_thread(UnitreeSdk2BridgeThread, nullptr);
 
