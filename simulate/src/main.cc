@@ -109,7 +109,7 @@ static mjrContext offscreen_con;
 static GLFWwindow* offscreen_window = nullptr;
 static bool offscreen_initialized = false;
 static int offscreen_step_counter = 0;
-static const int OFFSCREEN_RENDER_INTERVAL = 50;
+static const int OFFSCREEN_RENDER_INTERVAL = 100;
 static const int OFFSCREEN_WIDTH = 320;
 static const int OFFSCREEN_HEIGHT = 240;
 
@@ -120,7 +120,7 @@ namespace
   namespace mju = ::mujoco::sample_util;
 
   // constants
-  const double syncMisalign = 0.1;       // maximum mis-alignment before re-sync (simulation seconds)
+  const double syncMisalign = 0.5;       // maximum mis-alignment before re-sync (simulation seconds)
   const double simRefreshFraction = 0.7; // fraction of refresh available for simulation
   const int kErrorLength = 1024;         // load error string length
 
@@ -489,8 +489,12 @@ namespace
               syncSim = d->time;
               sim.speed_changed = false;
 
-              // run single step, let next iteration deal with timing
-              mj_step(m, d);
+              // run multiple steps to catch up (avoid single-step jitter on slow CPUs)
+              int catchup_steps = std::min(10, std::max(1,
+                  (int)(Seconds(elapsedCPU).count() / slowdown / m->opt.timestep)));
+              for (int i = 0; i < catchup_steps; i++) {
+                mj_step(m, d);
+              }
               stepped = true;
             }
 
@@ -592,9 +596,9 @@ namespace
                   mjr_setBuffer(mjFB_OFFSCREEN, &offscreen_con);
                   mjr_render(viewport, &offscreen_scn, &offscreen_con);
 
-                  // Read RGB pixels and depth buffer
-                  std::vector<unsigned char> rgb(OFFSCREEN_WIDTH * OFFSCREEN_HEIGHT * 3);
-                  std::vector<float> depth(OFFSCREEN_WIDTH * OFFSCREEN_HEIGHT);
+                  // Read RGB pixels and depth buffer (static to avoid reallocation)
+                  static std::vector<unsigned char> rgb(OFFSCREEN_WIDTH * OFFSCREEN_HEIGHT * 3);
+                  static std::vector<float> depth(OFFSCREEN_WIDTH * OFFSCREEN_HEIGHT);
                   mjr_readPixels(rgb.data(), depth.data(), viewport, &offscreen_con);
 
                   float znear = (float)m->vis.map.znear * (float)m->stat.extent;
