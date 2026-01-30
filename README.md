@@ -60,18 +60,33 @@ MuJoCo 3.3.6 **скачивается автоматически** при пер
 
 ---
 
-## Установка
+## Быстрый старт (автоматический скрипт)
+
+Скрипт `setup.sh` проверяет все зависимости, устанавливает недостающие и собирает проект:
+
+```bash
+git clone https://github.com/diaskabdualiev/physical_ai_championship.git
+cd physical_ai_championship
+chmod +x setup.sh
+./setup.sh
+```
+
+После завершения скрипт выведет команду для запуска.
+
+---
+
+## Установка вручную
+
+Если вы предпочитаете собрать всё самостоятельно:
+
+### 1. Клонирование
 
 ```bash
 git clone https://github.com/diaskabdualiev/physical_ai_championship.git
 cd physical_ai_championship
 ```
 
----
-
-## Сборка
-
-### Симулятор
+### 2. Сборка симулятора
 
 ```bash
 cd simulate
@@ -85,7 +100,7 @@ cd ../..
 - Определяется архитектура (x86_64 / aarch64)
 - Скачивается MuJoCo 3.3.6 если не найден
 
-### Контроллер
+### 3. Сборка контроллера
 
 ```bash
 cd g1_ctrl
