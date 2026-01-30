@@ -154,55 +154,37 @@ The key insight: `g1_ctrl` does not know it's being controlled by an algorithm. 
 | `simulate/config.yaml` | New config entries |
 | `simulate/CMakeLists.txt` | OpenCV dependency |
 
-## Dependencies
+## Quick Start
 
 ```bash
+# 1. Clone
+git clone https://github.com/diaskabdualiev/physical_ai_championship.git
+cd physical_ai_championship
+
+# 2. Install system dependencies
 sudo apt install libopencv-dev libglfw3-dev libboost-program-options-dev libyaml-cpp-dev libfmt-dev
-```
 
-### MuJoCo 3.3.6 (architecture-specific)
-
-Download the correct MuJoCo build for your architecture and create a symlink:
-
-Architecture is auto-detected by CMake. Download the correct build:
-
-**aarch64 (ARM64):**
-```bash
-cd simulate
-wget https://github.com/google-deepmind/mujoco/releases/download/3.3.6/mujoco-3.3.6-linux-aarch64.tar.gz
-tar xzf mujoco-3.3.6-linux-aarch64.tar.gz
-mv mujoco-3.3.6 mujoco-3.3.6-linux-aarch64
-```
-
-**x86_64 (AMD64):**
-```bash
-cd simulate
-wget https://github.com/google-deepmind/mujoco/releases/download/3.3.6/mujoco-3.3.6-linux-x86_64.tar.gz
-tar xzf mujoco-3.3.6-linux-x86_64.tar.gz
-mv mujoco-3.3.6 mujoco-3.3.6-linux-x86_64
-```
-
-### unitree_sdk2
-
-```bash
-cd /path/to/workspace
+# 3. Install unitree_sdk2
 git clone https://github.com/unitreerobotics/unitree_sdk2.git
-cd unitree_sdk2
-mkdir build && cd build
+cd unitree_sdk2 && mkdir build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=/opt/unitree_robotics
 sudo make install
-```
+cd ../..
 
-The SDK includes prebuilt static libraries for both `aarch64` and `x86_64`.
-
-## Build
-
-```bash
-cd simulate
-mkdir -p build && cd build
+# 4. Build simulator (MuJoCo downloads automatically)
+cd simulate && mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
+cd ../..
+
+# 5. Build controller
+cd g1_ctrl && mkdir -p build && cd build
+cmake ..
+make -j$(nproc)
+cd ../..
 ```
+
+Architecture (aarch64/x86_64) is auto-detected. MuJoCo 3.3.6 is downloaded automatically during `cmake`. ONNX Runtime for the controller is included in the repo for both architectures.
 
 ## Run
 
@@ -215,8 +197,6 @@ cd simulate/build
 **Terminal 2 — Controller:**
 ```bash
 cd g1_ctrl/build
-cmake ..
-make -j$(nproc)
 ./g1_ctrl --network=lo
 ```
 
