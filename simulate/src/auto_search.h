@@ -146,7 +146,7 @@ public:
             }
         } else {
             state_ = SearchState::SEARCHING;
-            rx_ = 1.0f;  // Rotate right full stick
+            rx_ = 1.0f;  // Rotate right (stable direction for RL policy)
             ly_ = 0.0f;
 
             if (show_window) {
