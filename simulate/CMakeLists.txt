@@ -25,17 +25,24 @@ else()
   message(FATAL_ERROR "Unsupported architecture: ${ARCH}")
 endif()
 
-# Fallback to generic mujoco/ symlink if arch-specific dir not found
+# Auto-download MuJoCo if not found
 if(NOT EXISTS ${MUJOCO_DIR})
-  if(EXISTS ${PROJECT_SOURCE_DIR}/mujoco)
-    set(MUJOCO_DIR ${PROJECT_SOURCE_DIR}/mujoco)
-    message(STATUS "Using mujoco/ symlink")
-  else()
-    message(FATAL_ERROR "MuJoCo not found. Download it:\n"
-      "  wget https://github.com/google-deepmind/mujoco/releases/download/3.3.6/mujoco-3.3.6-linux-${ARCH}.tar.gz\n"
-      "  tar xzf mujoco-3.3.6-linux-${ARCH}.tar.gz\n"
-      "  mv mujoco-3.3.6 mujoco-3.3.6-linux-${ARCH}")
+  set(MUJOCO_TAR "mujoco-3.3.6-linux-${ARCH}.tar.gz")
+  set(MUJOCO_URL "https://github.com/google-deepmind/mujoco/releases/download/3.3.6/${MUJOCO_TAR}")
+  message(STATUS "MuJoCo not found, downloading ${MUJOCO_URL} ...")
+  execute_process(
+    COMMAND wget -q --show-progress -O ${PROJECT_SOURCE_DIR}/${MUJOCO_TAR} ${MUJOCO_URL}
+    RESULT_VARIABLE DL_RESULT)
+  if(NOT DL_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to download MuJoCo")
   endif()
+  execute_process(
+    COMMAND tar xzf ${PROJECT_SOURCE_DIR}/${MUJOCO_TAR} -C ${PROJECT_SOURCE_DIR}
+    RESULT_VARIABLE TAR_RESULT)
+  if(NOT TAR_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to extract MuJoCo")
+  endif()
+  file(RENAME ${PROJECT_SOURCE_DIR}/mujoco-3.3.6 ${MUJOCO_DIR})
 endif()
 message(STATUS "MuJoCo: ${MUJOCO_DIR}")
 
