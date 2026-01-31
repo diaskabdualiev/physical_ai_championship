@@ -25,6 +25,10 @@ echo "1. Checking OS..."
 if [[ -f /etc/os-release ]]; then
     . /etc/os-release
     ok "$NAME $VERSION_ID ($(uname -m))"
+    if [[ "$VERSION_ID" == "24.04" ]]; then
+        fail "Ubuntu 24.04 is not supported. Please use 20.04 or 22.04."
+        exit 1
+    fi
 else
     warn "Cannot detect OS, continuing anyway"
 fi
@@ -104,32 +108,58 @@ echo ""
 echo "4. Building simulator..."
 info "MuJoCo will be downloaded automatically if needed"
 
-cd "$ROOT_DIR/simulate"
-mkdir -p build && cd build
-cmake .. 2>&1 | grep -E "MuJoCo|error|warning" || true
-make -j$(nproc) 2>&1 | tail -5
+if [ -f "$ROOT_DIR/simulate/build/unitree_mujoco" ]; then
+    warn "Simulator binary already exists"
+    read -p "  Delete build and rebuild? [y/N]: " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        rm -rf "$ROOT_DIR/simulate/build"
+        info "Build directory removed, rebuilding..."
+    else
+        ok "Skipping simulator build"
+    fi
+fi
 
-if [ -f unitree_mujoco ]; then
-    ok "Simulator built: simulate/build/unitree_mujoco"
-else
-    fail "Simulator build failed!"
-    exit 1
+if [ ! -f "$ROOT_DIR/simulate/build/unitree_mujoco" ]; then
+    cd "$ROOT_DIR/simulate"
+    mkdir -p build && cd build
+    cmake .. 2>&1 | grep -E "MuJoCo|error|warning" || true
+    make -j$(nproc) 2>&1 | tail -5
+
+    if [ -f unitree_mujoco ]; then
+        ok "Simulator built: simulate/build/unitree_mujoco"
+    else
+        fail "Simulator build failed!"
+        exit 1
+    fi
 fi
 
 # ─── 5. Build controller ───
 echo ""
 echo "5. Building controller..."
 
-cd "$ROOT_DIR/g1_ctrl"
-mkdir -p build && cd build
-cmake .. 2>&1 | grep -E "onnxruntime|error|warning" || true
-make -j$(nproc) 2>&1 | tail -5
+if [ -f "$ROOT_DIR/g1_ctrl/build/g1_ctrl" ]; then
+    warn "Controller binary already exists"
+    read -p "  Delete build and rebuild? [y/N]: " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        rm -rf "$ROOT_DIR/g1_ctrl/build"
+        info "Build directory removed, rebuilding..."
+    else
+        ok "Skipping controller build"
+    fi
+fi
 
-if [ -f g1_ctrl ]; then
-    ok "Controller built: g1_ctrl/build/g1_ctrl"
-else
-    fail "Controller build failed!"
-    exit 1
+if [ ! -f "$ROOT_DIR/g1_ctrl/build/g1_ctrl" ]; then
+    cd "$ROOT_DIR/g1_ctrl"
+    mkdir -p build && cd build
+    cmake .. 2>&1 | grep -E "onnxruntime|error|warning" || true
+    make -j$(nproc) 2>&1 | tail -5
+
+    if [ -f g1_ctrl ]; then
+        ok "Controller built: g1_ctrl/build/g1_ctrl"
+    else
+        fail "Controller build failed!"
+        exit 1
+    fi
 fi
 
 cd "$ROOT_DIR"
