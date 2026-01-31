@@ -120,7 +120,7 @@ namespace
   namespace mju = ::mujoco::sample_util;
 
   // constants
-  const double syncMisalign = 0.5;       // maximum mis-alignment before re-sync (simulation seconds)
+  const double syncMisalign = 0.1;       // maximum mis-alignment before re-sync (simulation seconds)
   const double simRefreshFraction = 0.7; // fraction of refresh available for simulation
   const int kErrorLength = 1024;         // load error string length
 
@@ -489,12 +489,8 @@ namespace
               syncSim = d->time;
               sim.speed_changed = false;
 
-              // run multiple steps to catch up (avoid single-step jitter on slow CPUs)
-              int catchup_steps = std::min(10, std::max(1,
-                  (int)(Seconds(elapsedCPU).count() / slowdown / m->opt.timestep)));
-              for (int i = 0; i < catchup_steps; i++) {
-                mj_step(m, d);
-              }
+              // run single step, let next iteration deal with timing
+              mj_step(m, d);
               stepped = true;
             }
 
